@@ -21,8 +21,19 @@ def to_repository_read(repository: Repository, owner_username: str) -> Repositor
     )
 
 
-def list_owners(session: Session) -> list[OwnerRead]:
-    owners = owners_dao.list_owners(session)
+def list_owners(
+    session: Session,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    username: str | None = None,
+) -> list[OwnerRead]:
+    owners = owners_dao.list_owners(
+        session,
+        limit=limit,
+        offset=offset,
+        username=username,
+    )
     payload: list[OwnerRead] = []
 
     for owner in owners:
@@ -42,11 +53,16 @@ def list_owners(session: Session) -> list[OwnerRead]:
     return payload
 
 
-async def create_owner(owner_create: OwnerCreate, session: Session) -> OwnerRead:
+async def _sync_owner_from_url(
+    owner_url: str,
+    session: Session,
+    *,
+    conflict_if_exists: bool,
+) -> OwnerRead:
     service = GitHubService()
     try:
-        owner_data = await service.get_owner(str(owner_create.url))
-        repositories_data = await service.list_owner_repositories(str(owner_create.url))
+        owner_data = await service.get_owner(owner_url)
+        repositories_data = await service.list_owner_repositories(owner_url)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -56,18 +72,22 @@ async def create_owner(owner_create: OwnerCreate, session: Session) -> OwnerRead
         await service.close()
 
     existing_owner = owners_dao.get_owner_by_username(session, owner_data["username"])
-    if existing_owner:
+    if existing_owner and conflict_if_exists:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Owner already exists.",
         )
 
-    owner = owners_dao.create_owner(
-        session,
-        username=owner_data["username"],
-        url=owner_data["url"],
-    )
-    repositories_dao.create_repositories_for_owner(session, owner.id, repositories_data)
+    if existing_owner:
+        owner = owners_dao.update_owner_url(session, existing_owner, owner_data["url"])
+    else:
+        owner = owners_dao.create_owner(
+            session,
+            username=owner_data["username"],
+            url=owner_data["url"],
+        )
+
+    repositories_dao.upsert_repositories_for_owner(session, owner.id, repositories_data)
 
     owner_repositories = owners_dao.list_repositories_for_owner(session, owner.id)
 
@@ -80,3 +100,20 @@ async def create_owner(owner_create: OwnerCreate, session: Session) -> OwnerRead
             for repository in owner_repositories
         ],
     )
+
+
+async def create_owner(owner_create: OwnerCreate, session: Session) -> OwnerRead:
+    return await _sync_owner_from_url(
+        str(owner_create.url),
+        session,
+        conflict_if_exists=True,
+    )
+
+
+async def ingest_owner_url(owner_url: str, session: Session) -> OwnerRead:
+    return await _sync_owner_from_url(owner_url, session, conflict_if_exists=False)
+
+
+async def refresh_owner(owner_username: str, session: Session) -> OwnerRead:
+    owner_url = f"https://github.com/{owner_username}"
+    return await _sync_owner_from_url(owner_url, session, conflict_if_exists=False)

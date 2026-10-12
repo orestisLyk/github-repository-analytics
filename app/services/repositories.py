@@ -19,9 +19,23 @@ def to_repository_read(repository: Repository, owner_username: str) -> Repositor
         owner_username=owner_username,
     )
 
-
-def list_repositories(session: Session) -> list[RepositoryRead]:
-    repositories = repositories_dao.list_repositories(session)
+def list_repositories(
+    session: Session,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    owner_username: str | None = None,
+    min_stars: int | None = None,
+    sort: str = "stars_desc",
+) -> list[RepositoryRead]:
+    repositories = repositories_dao.list_repositories(
+        session,
+        limit=limit,
+        offset=offset,
+        owner_username=owner_username,
+        min_stars=min_stars,
+        sort=sort,
+    )
     payload: list[RepositoryRead] = []
 
     for repository in repositories:
@@ -61,6 +75,38 @@ async def create_repository(
     owner = repositories_dao.get_or_create_owner_by_username(session, owner_username)
 
     repository = repositories_dao.create_repository(
+        session,
+        name=repository_data["name"],
+        full_name=repository_data["full_name"],
+        url=repository_data["url"],
+        description=repository_data.get("description"),
+        stars=repository_data.get("stars", 0),
+        forks=repository_data.get("forks", 0),
+        open_issues=repository_data.get("open_issues", 0),
+        owner_id=owner.id,
+    )
+
+    return to_repository_read(repository, owner.username)
+
+
+async def refresh_repository(
+    owner_username: str,
+    repository_name: str,
+    session: Session,
+) -> RepositoryRead:
+    service = GitHubService()
+    repository_url = f"https://github.com/{owner_username}/{repository_name}"
+    try:
+        repository_data = await service.get_repository(repository_url)
+    finally:
+        await service.close()
+
+    owner = repositories_dao.get_or_create_owner_by_username(
+        session,
+        repository_data["owner_username"],
+    )
+
+    repository = repositories_dao.upsert_repository(
         session,
         name=repository_data["name"],
         full_name=repository_data["full_name"],
