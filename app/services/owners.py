@@ -1,7 +1,9 @@
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from app.models import Owner, OwnerCreate, OwnerRead, Repository, RepositoryRead
+from app.dao import owners as owners_dao
+from app.dao import repositories as repositories_dao
+from app.models import OwnerCreate, OwnerRead, Repository, RepositoryRead
 from app.services.github import GitHubService
 
 
@@ -20,13 +22,11 @@ def to_repository_read(repository: Repository, owner_username: str) -> Repositor
 
 
 def list_owners(session: Session) -> list[OwnerRead]:
-    owners = session.exec(select(Owner)).all()
+    owners = owners_dao.list_owners(session)
     payload: list[OwnerRead] = []
 
     for owner in owners:
-        repositories = session.exec(
-            select(Repository).where(Repository.owner_id == owner.id)
-        ).all()
+        repositories = owners_dao.list_repositories_for_owner(session, owner.id)
         payload.append(
             OwnerRead(
                 id=owner.id,
@@ -55,38 +55,21 @@ async def create_owner(owner_create: OwnerCreate, session: Session) -> OwnerRead
     finally:
         await service.close()
 
-    existing_owner = session.exec(
-        select(Owner).where(Owner.username == owner_data["username"])
-    ).first()
+    existing_owner = owners_dao.get_owner_by_username(session, owner_data["username"])
     if existing_owner:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Owner already exists.",
         )
 
-    owner = Owner(username=owner_data["username"], url=owner_data["url"])
-    session.add(owner)
-    session.commit()
-    session.refresh(owner)
+    owner = owners_dao.create_owner(
+        session,
+        username=owner_data["username"],
+        url=owner_data["url"],
+    )
+    repositories_dao.create_repositories_for_owner(session, owner.id, repositories_data)
 
-    for repository_data in repositories_data:
-        repository = Repository(
-            name=repository_data["name"],
-            full_name=repository_data["full_name"],
-            url=repository_data["url"],
-            description=repository_data.get("description"),
-            stars=repository_data.get("stars", 0),
-            forks=repository_data.get("forks", 0),
-            open_issues=repository_data.get("open_issues", 0),
-            owner_id=owner.id,
-        )
-        session.add(repository)
-
-    session.commit()
-
-    owner_repositories = session.exec(
-        select(Repository).where(Repository.owner_id == owner.id)
-    ).all()
+    owner_repositories = owners_dao.list_repositories_for_owner(session, owner.id)
 
     return OwnerRead(
         id=owner.id,
