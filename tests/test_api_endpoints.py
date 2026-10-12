@@ -4,6 +4,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.database import get_session
+from app.routers.analytics import router as analytics_router
 from app.routers.jobs import router as jobs_router
 from app.routers.owners import router as owners_router
 from app.routers.repositories import router as repositories_router
@@ -28,6 +29,7 @@ def _build_test_client() -> TestClient:
     app.include_router(owners_router)
     app.include_router(repositories_router)
     app.include_router(jobs_router)
+    app.include_router(analytics_router)
     app.dependency_overrides[get_session] = _override_get_session
     jobs_service.JOB_SESSION_FACTORY = lambda: Session(test_engine)
     return TestClient(app)
@@ -284,3 +286,71 @@ def test_list_endpoints_pagination_and_filters(monkeypatch) -> None:
     assert filtered_repositories.status_code == 200
     assert len(filtered_repositories.json()) == 1
     assert filtered_repositories.json()[0]["full_name"] == "tiangolo/fastapi"
+
+
+def test_owner_summary_analytics(monkeypatch) -> None:
+    monkeypatch.setattr(GitHubService, "get_owner", _fake_get_owner)
+    monkeypatch.setattr(
+        GitHubService,
+        "list_owner_repositories",
+        _fake_list_owner_repositories,
+    )
+    monkeypatch.setattr(GitHubService, "close", _fake_close)
+
+    client = _build_test_client()
+    REPO_STARS["tiangolo/fastapi"] = 300
+    create_response = client.post("/owners/", json={"url": "https://github.com/tiangolo"})
+    assert create_response.status_code == 201
+
+    summary_response = client.get("/analytics/owners/tiangolo/summary")
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["owner_username"] == "tiangolo"
+    assert summary["repository_count"] == 1
+    assert summary["total_stars"] == 300
+    assert summary["median_stars"] == 300.0
+
+
+def test_repository_leaderboard_analytics(monkeypatch) -> None:
+    monkeypatch.setattr(GitHubService, "get_owner", _fake_get_owner)
+    monkeypatch.setattr(
+        GitHubService,
+        "list_owner_repositories",
+        _fake_list_owner_repositories,
+    )
+    monkeypatch.setattr(GitHubService, "close", _fake_close)
+
+    client = _build_test_client()
+    REPO_STARS["tiangolo/fastapi"] = 400
+    REPO_STARS["pydantic/sample"] = 150
+    assert client.post("/owners/", json={"url": "https://github.com/tiangolo"}).status_code == 201
+    assert client.post("/owners/", json={"url": "https://github.com/pydantic"}).status_code == 201
+
+    leaderboard_response = client.get("/analytics/repositories/leaderboard?metric=stars&limit=1")
+    assert leaderboard_response.status_code == 200
+    leaderboard = leaderboard_response.json()
+    assert len(leaderboard) == 1
+    assert leaderboard[0]["full_name"] == "tiangolo/fastapi"
+
+
+def test_owner_comparison_analytics(monkeypatch) -> None:
+    monkeypatch.setattr(GitHubService, "get_owner", _fake_get_owner)
+    monkeypatch.setattr(
+        GitHubService,
+        "list_owner_repositories",
+        _fake_list_owner_repositories,
+    )
+    monkeypatch.setattr(GitHubService, "close", _fake_close)
+
+    client = _build_test_client()
+    REPO_STARS["tiangolo/fastapi"] = 500
+    REPO_STARS["pydantic/sample"] = 200
+    assert client.post("/owners/", json={"url": "https://github.com/tiangolo"}).status_code == 201
+    assert client.post("/owners/", json={"url": "https://github.com/pydantic"}).status_code == 201
+
+    comparison_response = client.get("/analytics/owners/compare?left=tiangolo&right=pydantic")
+    assert comparison_response.status_code == 200
+    comparison = comparison_response.json()
+    assert comparison["left"]["owner_username"] == "tiangolo"
+    assert comparison["right"]["owner_username"] == "pydantic"
+    assert comparison["winner_by_total_stars"] == "tiangolo"
