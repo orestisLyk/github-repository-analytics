@@ -102,3 +102,33 @@ class IngestionJobRead(SQLModel):
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class OwnerAnalyticsSummary(SQLModel):
+    owner_username: str
+    repository_count: int
+    total_stars: int
+    total_forks: int
+    total_open_issues: int
+    average_stars: float
+    median_stars: float
+    average_forks: float
+    issue_pressure: float
+    health_score: float
+
+
+class RepositoryLeaderboardItem(SQLModel):
+    full_name: str
+    owner_username: str
+    stars: int
+    forks: int
+    open_issues: int
+    popularity_score: int
+    issue_pressure: float
+
+
+class OwnerComparison(SQLModel):
+    left: OwnerAnalyticsSummary
+    right: OwnerAnalyticsSummary
+    winner_by_total_stars: str
+    winner_by_health_score: str

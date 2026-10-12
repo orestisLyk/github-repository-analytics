@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.database import engine
+from app.routers.analytics import router as analytics_router
 from app.routers.jobs import router as jobs_router
 from app.routers.owners import router as owners_router
 from app.routers.repositories import router as repositories_router
@@ -26,6 +27,7 @@ app = FastAPI(
 app.include_router(owners_router)
 app.include_router(repositories_router)
 app.include_router(jobs_router)
+app.include_router(analytics_router)
 
 
 @app.get("/")
