@@ -1,16 +1,15 @@
-from __future__ import annotations
-
 from sqlmodel import Relationship, SQLModel, Field
 from pydantic import HttpUrl, field_validator
 
 # Owner model and schemas
 class BaseOwner(SQLModel):
     username: str
-    url: HttpUrl
+    url: str
 
 
 class Owner(BaseOwner, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)
     repositories: list["Repository"] = Relationship(back_populates="owner")
 
 
@@ -42,7 +41,7 @@ class OwnerRead(BaseOwner):
 class BaseRepository(SQLModel):
     name: str
     full_name: str
-    url: HttpUrl
+    url: str
     description: str | None = None
     stars: int = 0
     forks: int = 0
@@ -51,6 +50,7 @@ class BaseRepository(SQLModel):
 
 class Repository(BaseRepository, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    full_name: str = Field(unique=True, index=True)
     owner_id: int = Field(foreign_key="owner.id")
     owner: Owner = Relationship(back_populates="repositories")
 

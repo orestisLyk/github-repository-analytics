@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.database import SessionDep, engine
+from app.database import engine
+from app.routers.owners import router as owners_router
+from app.routers.repositories import router as repositories_router
 from sqlmodel import SQLModel
 
 @asynccontextmanager
@@ -19,3 +21,16 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+app.include_router(owners_router)
+app.include_router(repositories_router)
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"message": "GitHub Repository Analytics API"}
+
+
+@app.get("/health")
+def health_check() -> dict[str, str]:
+    return {"status": "ok"}
