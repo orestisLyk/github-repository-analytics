@@ -1,5 +1,12 @@
+from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlmodel import Relationship, SQLModel, Field
 from pydantic import HttpUrl, field_validator
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 # Owner model and schemas
 class BaseOwner(SQLModel):
@@ -75,3 +82,23 @@ class RepositoryCreate(SQLModel):
 class RepositoryRead(BaseRepository):
     id: int
     owner_username: str
+
+
+class IngestionJob(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    kind: str = Field(index=True)
+    target: str
+    status: str = Field(default="pending", index=True)
+    error_message: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class IngestionJobRead(SQLModel):
+    id: str
+    kind: str
+    target: str
+    status: str
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
