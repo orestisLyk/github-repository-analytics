@@ -67,6 +67,7 @@ def get_repository_leaderboard(
     limit: int = 10,
     offset: int = 0,
     owner_username: str | None = None,
+    min_stars: int | None = None,
 ) -> list[RepositoryLeaderboardItem]:
     repositories = session.exec(select(Repository)).all()
 
@@ -75,6 +76,9 @@ def get_repository_leaderboard(
         if owner is None:
             return []
         repositories = [repository for repository in repositories if repository.owner_id == owner.id]
+
+    if min_stars is not None:
+        repositories = [repository for repository in repositories if repository.stars >= min_stars]
 
     def popularity_score(repository: Repository) -> int:
         return repository.stars + (2 * repository.forks)

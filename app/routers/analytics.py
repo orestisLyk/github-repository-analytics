@@ -24,6 +24,7 @@ async def read_repository_leaderboard(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     owner_username: str | None = Query(default=None),
+    min_stars: int | None = Query(default=None, ge=0),
 ) -> list[RepositoryLeaderboardItem]:
     return get_repository_leaderboard(
         session,
@@ -31,6 +32,7 @@ async def read_repository_leaderboard(
         limit=limit,
         offset=offset,
         owner_username=owner_username,
+        min_stars=min_stars,
     )
 
 
