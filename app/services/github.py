@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from urllib.parse import urlparse
+from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
@@ -28,9 +29,15 @@ class GitHubService:
 	async def close(self) -> None:
 		await self._client.aclose()
 
-	async def _get(self, path: str) -> dict:
+	async def _request_get(
+		self,
+		path: str,
+		*,
+		params: dict[str, Any] | None = None,
+		not_found_detail: str = "Resource not found on GitHub.",
+	) -> httpx.Response:
 		try:
-			response = await self._client.get(path)
+			response = await self._client.get(path, params=params)
 		except httpx.RequestError as exc:
 			raise HTTPException(
 				status_code=status.HTTP_502_BAD_GATEWAY,
@@ -40,7 +47,7 @@ class GitHubService:
 		if response.status_code == status.HTTP_404_NOT_FOUND:
 			raise HTTPException(
 				status_code=status.HTTP_404_NOT_FOUND,
-				detail="Resource not found on GitHub.",
+				detail=not_found_detail,
 			)
 
 		if response.status_code == status.HTTP_403_FORBIDDEN:
@@ -59,6 +66,11 @@ class GitHubService:
 				status_code=status.HTTP_502_BAD_GATEWAY,
 				detail=f"GitHub API error ({response.status_code}).",
 			)
+
+		return response
+
+	async def _get(self, path: str) -> dict:
+		response = await self._request_get(path)
 
 		payload = response.json()
 		if not isinstance(payload, dict):
@@ -109,50 +121,46 @@ class GitHubService:
 
 	async def list_owner_repositories(self, owner_url: str) -> list[dict]:
 		username = self.parse_owner_url(owner_url)
-		try:
-			response = await self._client.get(
-				f"/users/{username}/repos",
-				params={"type": "owner", "sort": "updated", "per_page": 100},
-			)
-		except httpx.RequestError as exc:
-			raise HTTPException(
-				status_code=status.HTTP_502_BAD_GATEWAY,
-				detail="Could not reach GitHub API.",
-			) from exc
-
-		if response.status_code == status.HTTP_404_NOT_FOUND:
-			raise HTTPException(
-				status_code=status.HTTP_404_NOT_FOUND,
-				detail="Owner not found on GitHub.",
-			)
-
-		if response.is_error:
-			raise HTTPException(
-				status_code=status.HTTP_502_BAD_GATEWAY,
-				detail=f"GitHub API error ({response.status_code}).",
-			)
-
-		payload = response.json()
-		if not isinstance(payload, list):
-			raise HTTPException(
-				status_code=status.HTTP_502_BAD_GATEWAY,
-				detail="Unexpected response from GitHub API.",
-			)
-
 		repositories: list[dict] = []
-		for repository in payload:
-			repositories.append(
-				{
-					"name": repository["name"],
-					"full_name": repository["full_name"],
-					"url": repository["html_url"],
-					"description": repository.get("description"),
-					"stars": repository.get("stargazers_count", 0),
-					"forks": repository.get("forks_count", 0),
-					"open_issues": repository.get("open_issues_count", 0),
-					"owner_username": username,
-				}
+		page = 1
+
+		while True:
+			response = await self._request_get(
+				f"/users/{username}/repos",
+				params={
+					"type": "owner",
+					"sort": "updated",
+					"per_page": 100,
+					"page": page,
+				},
+				not_found_detail="Owner not found on GitHub.",
 			)
+
+			payload = response.json()
+			if not isinstance(payload, list):
+				raise HTTPException(
+					status_code=status.HTTP_502_BAD_GATEWAY,
+					detail="Unexpected response from GitHub API.",
+				)
+
+			if not payload:
+				break
+
+			for repository in payload:
+				repositories.append(
+					{
+						"name": repository["name"],
+						"full_name": repository["full_name"],
+						"url": repository["html_url"],
+						"description": repository.get("description"),
+						"stars": repository.get("stargazers_count", 0),
+						"forks": repository.get("forks_count", 0),
+						"open_issues": repository.get("open_issues_count", 0),
+						"owner_username": username,
+					}
+				)
+
+			page += 1
 
 		return repositories
 
