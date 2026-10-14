@@ -12,14 +12,11 @@ def list_repositories(
     owner_username: str | None = None,
     min_stars: int | None = None,
     sort: str = "stars_desc",
-) -> list[Repository]:
-    query = select(Repository)
+) -> list[tuple[Repository, str]]:
+    query = select(Repository, Owner.username).join(Owner, Repository.owner_id == Owner.id)
 
     if owner_username:
-        owner = session.exec(select(Owner).where(Owner.username == owner_username)).first()
-        if owner is None:
-            return []
-        query = query.where(Repository.owner_id == owner.id)
+        query = query.where(Owner.username == owner_username)
 
     if min_stars is not None:
         query = query.where(Repository.stars >= min_stars)

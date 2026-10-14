@@ -34,23 +34,18 @@ def list_owners(
         offset=offset,
         username=username,
     )
-    payload: list[OwnerRead] = []
-
-    for owner in owners:
-        repositories = owners_dao.list_repositories_for_owner(session, owner.id)
-        payload.append(
-            OwnerRead(
-                id=owner.id,
-                username=owner.username,
-                url=owner.url,
-                repositories=[
-                    to_repository_read(repository, owner.username)
-                    for repository in repositories
-                ],
-            )
+    return [
+        OwnerRead(
+            id=owner.id,
+            username=owner.username,
+            url=owner.url,
+            repositories=[
+                to_repository_read(repository, owner.username)
+                for repository in owner.repositories
+            ],
         )
-
-    return payload
+        for owner in owners
+    ]
 
 
 async def _sync_owner_from_url(

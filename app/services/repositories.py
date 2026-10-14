@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.dao import repositories as repositories_dao
-from app.models import Owner, Repository, RepositoryCreate, RepositoryRead
+from app.models import Repository, RepositoryCreate, RepositoryRead
 from app.services.github import GitHubService
 
 
@@ -28,7 +28,7 @@ def list_repositories(
     min_stars: int | None = None,
     sort: str = "stars_desc",
 ) -> list[RepositoryRead]:
-    repositories = repositories_dao.list_repositories(
+    repository_rows = repositories_dao.list_repositories(
         session,
         limit=limit,
         offset=offset,
@@ -36,14 +36,10 @@ def list_repositories(
         min_stars=min_stars,
         sort=sort,
     )
-    payload: list[RepositoryRead] = []
-
-    for repository in repositories:
-        owner = session.get(Owner, repository.owner_id)
-        owner_username = owner.username if owner else "unknown"
-        payload.append(to_repository_read(repository, owner_username))
-
-    return payload
+    return [
+        to_repository_read(repository, owner_name)
+        for repository, owner_name in repository_rows
+    ]
 
 
 async def create_repository(

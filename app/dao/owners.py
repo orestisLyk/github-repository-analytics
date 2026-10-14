@@ -1,3 +1,4 @@
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.models import Owner, Repository
@@ -10,7 +11,7 @@ def list_owners(
     offset: int = 0,
     username: str | None = None,
 ) -> list[Owner]:
-    query = select(Owner)
+    query = select(Owner).options(selectinload(Owner.repositories))
     if username:
         query = query.where(Owner.username.contains(username))
     query = query.order_by(Owner.username).offset(offset).limit(limit)

@@ -1,6 +1,7 @@
 from statistics import median
 
 from fastapi import HTTPException, status
+from sqlalchemy import desc
 from sqlmodel import Session, select
 
 from app.models import (
@@ -69,33 +70,29 @@ def get_repository_leaderboard(
     owner_username: str | None = None,
     min_stars: int | None = None,
 ) -> list[RepositoryLeaderboardItem]:
-    repositories = session.exec(select(Repository)).all()
+    popularity_score_expr = (Repository.stars + (2 * Repository.forks)).label("popularity_score")
+    query = (
+        select(Repository, Owner.username, popularity_score_expr)
+        .join(Owner, Repository.owner_id == Owner.id)
+    )
 
     if owner_username:
-        owner = session.exec(select(Owner).where(Owner.username == owner_username)).first()
-        if owner is None:
-            return []
-        repositories = [repository for repository in repositories if repository.owner_id == owner.id]
+        query = query.where(Owner.username == owner_username)
 
     if min_stars is not None:
-        repositories = [repository for repository in repositories if repository.stars >= min_stars]
-
-    def popularity_score(repository: Repository) -> int:
-        return repository.stars + (2 * repository.forks)
+        query = query.where(Repository.stars >= min_stars)
 
     if metric == "stars":
-        repositories.sort(key=lambda repository: (repository.stars, repository.full_name), reverse=True)
+        query = query.order_by(desc(Repository.stars), Repository.full_name)
     elif metric == "forks":
-        repositories.sort(key=lambda repository: (repository.forks, repository.full_name), reverse=True)
+        query = query.order_by(desc(Repository.forks), Repository.full_name)
     else:
-        repositories.sort(key=lambda repository: (popularity_score(repository), repository.full_name), reverse=True)
+        query = query.order_by(desc(popularity_score_expr), Repository.full_name)
 
-    sliced = repositories[offset : offset + limit]
+    rows = session.exec(query.offset(offset).limit(limit)).all()
     payload: list[RepositoryLeaderboardItem] = []
 
-    for repository in sliced:
-        owner = session.get(Owner, repository.owner_id)
-        owner_name = owner.username if owner else "unknown"
+    for repository, owner_name, popularity_score in rows:
         pressure = repository.open_issues / max(repository.stars, 1)
         payload.append(
             RepositoryLeaderboardItem(
@@ -104,7 +101,7 @@ def get_repository_leaderboard(
                 stars=repository.stars,
                 forks=repository.forks,
                 open_issues=repository.open_issues,
-                popularity_score=popularity_score(repository),
+                popularity_score=popularity_score,
                 issue_pressure=round(pressure, 4),
             )
         )
