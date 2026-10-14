@@ -15,7 +15,7 @@ def to_repository_read(repository: Repository, owner_username: str) -> Repositor
         description=repository.description,
         stars=repository.stars,
         forks=repository.forks,
-        open_issues=repository.open_issues,
+        open_items=repository.open_issues,
         owner_username=owner_username,
     )
 

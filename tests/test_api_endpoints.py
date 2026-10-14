@@ -124,6 +124,7 @@ def test_create_owner_stores_owner_and_repositories(monkeypatch) -> None:
     assert payload["username"] == "tiangolo"
     assert len(payload["repositories"]) == 1
     assert payload["repositories"][0]["full_name"] == "tiangolo/fastapi"
+    assert payload["repositories"][0]["open_items"] == 5
 
     list_response = client.get("/owners/")
     assert list_response.status_code == 200
@@ -354,3 +355,29 @@ def test_owner_comparison_analytics(monkeypatch) -> None:
     assert comparison["left"]["owner_username"] == "tiangolo"
     assert comparison["right"]["owner_username"] == "pydantic"
     assert comparison["winner_by_total_stars"] == "tiangolo"
+    assert comparison["total_stars_tie"] is False
+    assert comparison["engagement_score_tie"] is False
+
+
+def test_owner_comparison_analytics_tie(monkeypatch) -> None:
+    monkeypatch.setattr(GitHubService, "get_owner", _fake_get_owner)
+    monkeypatch.setattr(
+        GitHubService,
+        "list_owner_repositories",
+        _fake_list_owner_repositories,
+    )
+    monkeypatch.setattr(GitHubService, "close", _fake_close)
+
+    client = _build_test_client()
+    REPO_STARS["tiangolo/fastapi"] = 250
+    REPO_STARS["pydantic/sample"] = 250
+    assert client.post("/owners/", json={"url": "https://github.com/tiangolo"}).status_code == 201
+    assert client.post("/owners/", json={"url": "https://github.com/pydantic"}).status_code == 201
+
+    comparison_response = client.get("/analytics/owners/compare?left=tiangolo&right=pydantic")
+    assert comparison_response.status_code == 200
+    comparison = comparison_response.json()
+    assert comparison["winner_by_total_stars"] is None
+    assert comparison["winner_by_engagement_score"] is None
+    assert comparison["total_stars_tie"] is True
+    assert comparison["engagement_score_tie"] is True

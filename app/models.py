@@ -79,8 +79,15 @@ class RepositoryCreate(SQLModel):
         return v
 
 
-class RepositoryRead(BaseRepository):
+class RepositoryRead(SQLModel):
     id: int
+    name: str
+    full_name: str
+    url: str
+    description: str | None = None
+    stars: int = 0
+    forks: int = 0
+    open_items: int
     owner_username: str
 
 
@@ -109,12 +116,12 @@ class OwnerAnalyticsSummary(SQLModel):
     repository_count: int
     total_stars: int
     total_forks: int
-    total_open_issues: int
+    total_open_items: int
     average_stars: float
     median_stars: float
     average_forks: float
     issue_pressure: float
-    health_score: float
+    engagement_score: float
 
 
 class RepositoryLeaderboardItem(SQLModel):
@@ -122,7 +129,7 @@ class RepositoryLeaderboardItem(SQLModel):
     owner_username: str
     stars: int
     forks: int
-    open_issues: int
+    open_items: int
     popularity_score: int
     issue_pressure: float
 
@@ -130,5 +137,7 @@ class RepositoryLeaderboardItem(SQLModel):
 class OwnerComparison(SQLModel):
     left: OwnerAnalyticsSummary
     right: OwnerAnalyticsSummary
-    winner_by_total_stars: str
-    winner_by_health_score: str
+    winner_by_total_stars: str | None
+    winner_by_engagement_score: str | None
+    total_stars_tie: bool
+    engagement_score_tie: bool

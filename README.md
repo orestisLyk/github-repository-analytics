@@ -154,6 +154,18 @@ pytest -q
 - `GET /analytics/repositories/leaderboard` - Repository leaderboard by metric
 - `GET /analytics/owners/compare?left=<owner>&right=<owner>` - Compare two owners
 
+## Metric Definitions
+
+This project uses pragmatic scoring heuristics for ranking and comparison.
+
+- `popularity_score = stars + 2 * forks`
+- `issue_pressure = open_items / max(total_stars, 1)`
+- `engagement_score = clamp(0, 100, 50 + average_stars * 0.2 - issue_pressure * 25)`
+
+Notes:
+- `open_items` comes from GitHub `open_issues_count`, which includes open pull requests.
+- `engagement_score` is an internal comparative signal, not an official GitHub health metric.
+
 ## Next Improvements
 
 - Add CI checks for linting and tests
