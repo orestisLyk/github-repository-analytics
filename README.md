@@ -35,6 +35,62 @@ docker-compose.yml
 requirements.txt
 ```
 
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+    C[Client or Frontend] --> A[FastAPI App]
+    A --> R1[Owners Router]
+    A --> R2[Repositories Router]
+    A --> R3[Jobs Router]
+    A --> R4[Analytics Router]
+
+    R1 --> S1[Owners Service]
+    R2 --> S2[Repositories Service]
+    R3 --> S3[Jobs Service]
+    R4 --> S4[Analytics Service]
+
+    S1 --> D1[Owners DAO]
+    S2 --> D2[Repositories DAO]
+    S3 --> D3[Jobs DAO logic]
+    S4 --> D1
+    S4 --> D2
+
+    S1 --> G[GitHub API Client]
+    S2 --> G
+
+    D1 --> DB[(PostgreSQL)]
+    D2 --> DB
+    D3 --> DB
+```
+
+## Sample API Response
+
+Example response for `GET /analytics/repositories/leaderboard?metric=popularity&limit=2`:
+
+```json
+[
+  {
+    "full_name": "tiangolo/fastapi",
+    "owner_username": "tiangolo",
+    "stars": 76000,
+    "forks": 6600,
+    "open_items": 540,
+    "popularity_score": 89200,
+    "issue_pressure": 0.0071
+  },
+  {
+    "full_name": "fastapi/sqlmodel",
+    "owner_username": "fastapi",
+    "stars": 15000,
+    "forks": 1400,
+    "open_items": 120,
+    "popularity_score": 17800,
+    "issue_pressure": 0.008
+  }
+]
+```
+
 ## Prerequisites
 
 - Docker Desktop (or Docker Engine + Compose plugin)
@@ -135,6 +191,41 @@ Run endpoint tests:
 
 ```bash
 pytest -q
+```
+
+## Automated Test and Lint Checks
+
+Recommended CI checks:
+
+```bash
+python -m pytest -q
+python -m compileall app tests
+```
+
+Example GitHub Actions job:
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Lint and syntax checks
+        run: python -m compileall app tests
+      - name: Run tests
+        run: python -m pytest -q
 ```
 
 ## Database Migrations
