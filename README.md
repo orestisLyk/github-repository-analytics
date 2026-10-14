@@ -71,7 +71,13 @@ Security note:
 docker compose up --build
 ```
 
-3. Open the API:
+3. Apply migrations:
+
+```bash
+make migrate
+```
+
+4. Open the API:
 - App root: http://localhost:8000/
 - Health check: http://localhost:8000/health
 - Swagger UI: http://localhost:8000/docs
@@ -96,6 +102,7 @@ make up
 make ps
 make logs
 make health
+make migrate
 make test
 make down
 ```
@@ -110,7 +117,13 @@ pip install -r requirements.txt
 ```
 
 3. Ensure `.env` contains valid local database settings.
-4. Start the API:
+4. Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
+5. Start the API:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -122,6 +135,36 @@ Run endpoint tests:
 
 ```bash
 pytest -q
+```
+
+## Database Migrations
+
+Schema changes are managed with Alembic. The app does not auto-create tables at startup.
+
+If you already have tables created from the earlier prototype flow, run this one-time bootstrap first:
+
+```bash
+alembic stamp head
+```
+
+After that, use normal upgrade/downgrade commands.
+
+- Create a migration after model changes:
+
+```bash
+alembic revision --autogenerate -m "describe change"
+```
+
+- Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
+- Roll back one migration:
+
+```bash
+alembic downgrade -1
 ```
 
 ## API Endpoints
@@ -169,5 +212,4 @@ Notes:
 ## Next Improvements
 
 - Add CI checks for linting and tests
-- Add migrations support via Alembic workflows
 - Add authentication and rate limiting for production exposure

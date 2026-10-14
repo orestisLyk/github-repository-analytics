@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs ps health test
+.PHONY: help build up down restart logs ps health test migrate downgrade stamp
 
 help:
 	@echo "Available targets:"
@@ -10,6 +10,9 @@ help:
 	@echo "  ps       Show service status"
 	@echo "  health   Check API health endpoint"
 	@echo "  test     Run pytest locally"
+	@echo "  migrate  Apply database migrations to head"
+	@echo "  stamp    Mark current schema as migrated to head"
+	@echo "  downgrade  Roll back one migration"
 
 build:
 	docker compose build
@@ -33,3 +36,12 @@ health:
 
 test:
 	pytest -q
+
+migrate:
+	alembic upgrade head
+
+stamp:
+	alembic stamp head
+
+downgrade:
+	alembic downgrade -1
